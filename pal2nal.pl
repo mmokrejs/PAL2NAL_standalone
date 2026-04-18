@@ -329,7 +329,7 @@ if ($outform eq "codon" &&
     if ($html) {
         print "\nERROR:  if \"codon(Output format)\" is selected, don't use \"Remove gaps, inframe stop codons\" or \"Remove mismatches\" or \"Use only selected positions\".\n\n";
     } else {
-        print STDERR "\nERROR:  \"-outform codon\" is not valid with -blockonly, -nogap, -nomismatch\n\n";
+        print STDERR "\nERROR:  \"-output codon\" is not valid with -blockonly, -nogap, -nomismatch\n\n";
     }
     exit;
 }
