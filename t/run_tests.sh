@@ -130,18 +130,15 @@ else
     (( FAIL++ )) || true
 fi
 
-# ─── T11: BUG-7 baseline — error message option name ────────────────────────
-echo "# T11: BUG-7 baseline — option name in codon+nogap error"
+# ─── T11: BUG-7 fixed — error message option name ─────────────────────────────
+echo "# T11: BUG-7 fixed — option name in codon+nogap error"
 ERR11=$(perl "$PAL2NAL" "$T/data/test.aln" "$T/data/test.nuc" \
     -output codon -nogap 2>&1)
-if echo "$ERR11" | grep -q "\-outform"; then
-    echo "ok - T11 BUG-7 baseline: error says '-outform' (wrong, to be fixed)"
-    (( PASS++ )) || true
-elif echo "$ERR11" | grep -q "\-output"; then
+if echo "$ERR11" | grep -q "\-output"; then
     echo "ok - T11 BUG-7 fixed: error correctly says '-output'"
     (( PASS++ )) || true
 else
-    echo "not ok - T11 unexpected error message: $ERR11"
+    echo "not ok - T11 expected '-output', got: $ERR11"
     (( FAIL++ )) || true
 fi
 
