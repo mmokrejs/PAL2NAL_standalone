@@ -394,6 +394,7 @@ close(ALNFILE);
 
 open(ALNFILE, "< $alnfile") || die "Can't open $alnfile";
 $getblock = 0;
+$getaln = 0;
 $aafiledata = <ALNFILE>;
 close(ALNFILE);
 $aafiledata =~ s/\x0D\x0A|\x0D|\x0A/\n/g;
@@ -430,7 +431,6 @@ foreach (split(/\n/, $aafiledata)) {
             $id2aaaln{$tmpid} .= $_;
         }
     } elsif ($inalntype eq "gblocks") {
-        $getaln = 0;
         if (/^\s+\=/) {
             $getaln = 1;
         } elsif (/^Parameters/) {

@@ -161,6 +161,18 @@ else
     (( PASS++ )) || true
 fi
 
+# ─── T14: Gblocks format input ────────────────────────────────────────────────
+echo "# T14: BUG-6 — Gblocks format input parsing"
+OUT_GBLOCKS=$(perl "$PAL2NAL" "$T/data/test_gblocks.aln" "$T/data/test.nuc" \
+    -output fasta 2>/dev/null || echo "ERROR")
+if echo "$OUT_GBLOCKS" | grep -q "^>seq1"; then
+    echo "ok - T14 BUG-6 fixed: Gblocks input successfully parsed"
+    (( PASS++ )) || true
+else
+    echo "not ok - T14 expected Gblocks output, got none"
+    (( FAIL++ )) || true
+fi
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
 echo "1..$((PASS + FAIL + SKIP))"
