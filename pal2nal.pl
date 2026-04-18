@@ -363,7 +363,7 @@ foreach $i (0..$#nucfiles) {
 
 
 #-------------------#
-#  Get aa alignemt
+#  Get aa alignment
 #-------------------#
 
 undef(@aaid);
