@@ -1953,7 +1953,7 @@ sub my1while {
 sub showhelp {
 print STDERR<<EOF;
 
-pal2nal.pl  (v14)
+pal2nal.pl  (v14.1)
 
 Usage:  pal2nal.pl  pep.aln  nuc.fasta  [nuc.fasta...]  [options]
 
