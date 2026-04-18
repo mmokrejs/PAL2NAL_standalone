@@ -1,7 +1,4 @@
-CLUSTAL W multiple sequence alignment
-
-
-seq1        MVLSPADKTNVK
-seq2        MVLSPADKTNVK
-
-
+>seq1
+MVLSQADK
+>seq2
+MVLSQADK

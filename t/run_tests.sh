@@ -147,18 +147,16 @@ echo "# T12: -codontable 2 accepted"
 ok_contains "T12 codontable 2 produces output" "CLUSTAL" \
     perl "$PAL2NAL" "$T/data/test.aln" "$T/data/test.nuc" -codontable 2
 
-# ─── T13: BUG-5 baseline — -nogap stop-codon filter with table 6 ────────────
-echo "# T13: BUG-5 baseline — -nogap with table 6 (CAA/CAG are Gln not stop)"
-# In table 6 TAA/TAG code for Gln; Universal stop codon filter should NOT remove them
-# This test documents the baseline (buggy) behavior
+# ─── T13: BUG-5 fixed — -nogap stop-codon filter with table 6 ───────────────
+echo "# T13: BUG-5 fixed — -nogap with table 6 (TAA/TAG are Gln not stop)"
 OUT13=$(perl "$PAL2NAL" "$T/data/test_table6.aln" "$T/data/test_table6.nuc" \
     -output fasta -nogap -codontable 6 2>/dev/null || echo "ERROR")
-if [[ -z "$OUT13" ]] || [[ "$OUT13" == "ERROR" ]]; then
-    echo "ok - T13 BUG-5 baseline: -nogap with table 6 drops Gln codons (buggy)"
+if [[ -n "$OUT13" ]] && [[ "$OUT13" != "ERROR" ]] && echo "$OUT13" | grep -q "^>seq1"; then
+    echo "ok - T13 BUG-5 fixed: -nogap with table 6 retains TAA/TAG (Gln) codons"
     (( PASS++ )) || true
 else
-    echo "ok - T13 BUG-5 fixed: -nogap with table 6 retains Gln codons"
-    (( PASS++ )) || true
+    echo "not ok - T13 expected Gln codons to be retained, got: $OUT13"
+    (( FAIL++ )) || true
 fi
 
 # ─── T14: Gblocks format input ────────────────────────────────────────────────

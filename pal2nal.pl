@@ -860,12 +860,13 @@ if ($nogap) {
     undef(@nogapaln);
     undef(@nogapcoloraln);
     undef($nogapmaskseq);
+$stop_regex = & get_stop_regex($codontable);
     while ($tmppos < $alilen) {
         $outok = 1;
         foreach $i (0..$#codonaln) {
             $tmpcodon = substr($codonaln[$i], $tmppos, 3);
             $outok = 0 if ($tmpcodon =~ /-/);
-            $outok = 0 if ($tmpcodon =~ /(((U|T)A(A|G|R))|((T|U)GA))/);
+            $outok = 0 if ($tmpcodon =~ /$stop_regex/i);
         }
         if ($outok) {
             foreach $i (0..$#codonaln) {
@@ -2006,4 +2007,18 @@ Usage:  pal2nal.pl  pep.aln  nuc.fasta  [nuc.fasta...]  [options]
     - IDs in pep.aln are used in the output.
 
 EOF
+}
+
+#---------------------------------------------------------
+
+sub get_stop_regex {
+    local($ct) = @_;
+    if ($ct == 2) { return "(((U|T)A(A|G|R))|(AG(A|G|R)))"; }
+    elsif ($ct == 3 || $ct == 4 || $ct == 5 || $ct == 9 || $ct == 13 || $ct == 21) { return "((U|T)A(A|G|R))"; }
+    elsif ($ct == 6) { return "((T|U)GA)"; }
+    elsif ($ct == 14) { return "((U|T)AG)"; }
+    elsif ($ct == 15 || $ct == 16) { return "(((U|T)AA)|((T|U)GA))"; }
+    elsif ($ct == 22) { return "((U|T)(C|A|G|R)A)"; }
+    elsif ($ct == 23) { return "(((U|T)A(A|G|R))|((T|U)GA)|((T|U)(T|U)A))"; }
+    else { return "(((U|T)A(A|G|R))|((T|U)GA))"; }
 }
