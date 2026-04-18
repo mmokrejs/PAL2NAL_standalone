@@ -986,7 +986,7 @@ if ($outform eq "clustal") {
                 }
             }
             if ($maxaan >= 4) {
-                $tmplen = int(($tmpaa - 1) / 3) + 1;  # 4, 5, 6 -> 2
+                $tmplen = int(($maxaan - 1) / 3) + 1;  # 4, 5, 6 -> 2
                                                       # 7, 8, 9 -> 3
             } else {
                 $tmplen = 1;

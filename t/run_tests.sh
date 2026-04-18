@@ -171,6 +171,30 @@ else
     (( FAIL++ )) || true
 fi
 
+# ─── T15: BUG-1 — asymmetric frameshift codon sizing ──────────────────────────
+echo "# T15: BUG-1 — asymmetric frameshift codon sizing"
+cat > "$T/data/test_bug1_seq1.aln" << 'EOF'
+>seq1
+A7A
+>seq2
+A-A
+EOF
+cat > "$T/data/test_bug1_seq1.nuc" << 'EOF'
+>seq1
+GCCAAAAAAAGCC
+>seq2
+GCCGCC
+EOF
+OUT_BUG1=$(perl "$PAL2NAL" "$T/data/test_bug1_seq1.aln" "$T/data/test_bug1_seq1.nuc" -output codon 2>/dev/null)
+if echo "$OUT_BUG1" | grep -q "A   7   -   -   A"; then
+    echo "ok - T15 BUG-1 fixed: frameshift column sizing is correct regardless of sequence order"
+    (( PASS++ )) || true
+else
+    echo "not ok - T15 expected 'A   7   -   -   A' in output header, got:"
+    echo "$OUT_BUG1" | head -5
+    (( FAIL++ )) || true
+fi
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
 echo "1..$((PASS + FAIL + SKIP))"
