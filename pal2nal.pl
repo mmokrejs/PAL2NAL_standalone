@@ -1844,13 +1844,14 @@ sub pn2codon {
         }
 
         undef($wholecodon);
+        $peppos = 0;
         foreach $i (0..$#anchor) {
             # print "    $anchor[$i]\n";
             $anclen = length($anchor[$i]);
             undef(@qcodon);
             undef(@fncodon);
             foreach $j (0..$anclen - 1) {
-                $peppos = $i * 10 + $j + 1;
+                $peppos++;
                 $tmpaa = substr($anchor[$i], $j, 1);
                 if ($tmpaa =~ /[ACDEFGHIKLMNPQRSTVWY_\*XU]/) {
                     if ($i == 0 && $qcodon[$i] !~ /\w/ && $tmpaa eq "M") {
