@@ -720,7 +720,7 @@ if (!$nostderr) {
                 print STDERR "#  Input files:  $alnfile @nucfiles\n";
             }
             if ($nomismatch) {
-                # print STDERR "#  $outmessage[$j]  (exlucded from the output)\n";
+                # print STDERR "#  $outmessage[$j]  (excluded from the output)\n";
             } else {
                 print STDERR "#  $outmessage[$j]\n";
             }
