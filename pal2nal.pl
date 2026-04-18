@@ -559,7 +559,6 @@ foreach $i (0..$#aaid) {
             print "$errnuc\n";
 
             print "</pre>\n";
-            $tmpwhich = "tmp/tmpwhich.$$";
         } else {
             print STDERR "#---  ERROR: inconsistency between the following pep and nuc seqs  ---#\n";
 
@@ -568,104 +567,17 @@ foreach $i (0..$#aaid) {
 
             print STDERR ">$tmpnucid\n";
             print STDERR "$errnuc\n";
-
-            $tmpwhich = "tmpwhich.$$";
         }
 
-        if ($myos eq "linux") {
-            system("which bl2seq > $tmpwhich");
-
-            $foundbl2seq = 0;
-            open(TMPWHICH, "< $tmpwhich") || die "Can't open $tmpwhich";
-            while (<TMPWHICH>) {
-                chomp;
-                $foundbl2seq = 1 if (/bl2seq$/);
-            }
-            close(TMPWHICH);
-            unlink($tmpwhich);
-
-            if ($foundbl2seq) {
-
-
-                #------------------------------------------#
-                # run bl2seq (if the command is available)
-                #------------------------------------------#
-
-                if ($html) {
-                    $erraafile = "tmp/erraafile.$$";
-                    $errnucfile = "tmp/errnucfile.$$";
-                    $tblnout = "tmp/tbln.out.$$";
-                } else {
-                    $erraafile = "erraafile.$$";
-                    $errnucfile = "errnucfile.$$";
-                    $tblnout = "tbln.out.$$";
-                }
-
-                open(ERRAAFILE, "> $erraafile") || die "Can't open $erraafile";
-                print ERRAAFILE ">$aaid[$i]\n";
-                print ERRAAFILE "$erraa\n";
-                close(ERRAAFILE);
-
-                open(ERRNUCFILE, "> $errnucfile") || die "Can't open $errnucfile";
-                print ERRNUCFILE ">$tmpnucid\n";
-                print ERRNUCFILE "$errnuc\n";
-                close(ERRNUCFILE);
-
-                system("bl2seq -p tblastn -F F -i $erraafile -j $errnucfile -o $tblnout");
-
-                if ($html) {
-                    print "<BR>\n";
-                    print "<BR>\n";
-                    print "<H1>Check the following TBLASTN output.</H1><BR>\n";
-                    print "<pre>\n";
-                    print "      your pep -> 'Query'\n";
-                    print "      your nuc -> 'Sbjct'\n";
-                    print "<BR>\n";
-                } else {
-                    print STDERR "\n";
-                    print STDERR "\n";
-                    print STDERR "        ###-----   Check the following TBLASTN output:           -----###\n";
-                    print STDERR "        ###-----       your pep -> 'Query'                       -----###\n";
-                    print STDERR "        ###-----       your nuc -> 'Sbjct'                       -----###\n";
-                    print STDERR "\n";
-                }
-
-                open(TBLNOUT, "< $tblnout") || die "Can't open $tblnout";
-                $tblnoutdata = <TBLNOUT>;
-                close(TBLNOUT);
-                $tblnoutdata =~ s/\x0D\x0A|\x0D|\x0A/\n/g;
-                foreach (split(/\n/, $tblnoutdata)) {
-                    if ($html) {
-                        print "$_\n";
-                    } else {
-                        print STDERR "$_\n";
-                    }
-                }
-
-                if ($html) {
-                    print "</pre>\n";
-                }
-
-                unlink($erraafile);
-                unlink($errnucfile);
-                unlink($tblnout);
-            } else {
-                if ($html) {
-                    print "<BR>\n";
-                    print "<BR>\n";
-                    print "Run bl2seq (-p tblastn) or GeneWise to see the inconsistency.<BR>\n";
-                    print "<BR>\n";
-                } else {
-                    print STDERR "\n";
-                    print STDERR "\n";
-                    print STDERR "Run bl2seq (-p tblastn) or GeneWise to see the inconsistency.\n";
-                    print STDERR "\n";
-                }
-            }
-        } else {    ####    non-linux environment
+        if ($html) {
+            print "<BR>\n";
+            print "<BR>\n";
+            print "Run blastp to see the inconsistency.<BR>\n";
+            print "<BR>\n";
+        } else {
             print STDERR "\n";
             print STDERR "\n";
-            print STDERR "Run bl2seq (-p tblastn) or GeneWise to see the inconsistency.\n";
+            print STDERR "Run blastp to see the inconsistency.\n";
             print STDERR "\n";
         }
         exit;
