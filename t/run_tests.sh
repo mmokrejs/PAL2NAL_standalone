@@ -195,6 +195,54 @@ else
     (( FAIL++ )) || true
 fi
 
+# ─── T16: Viterbi frameshift recovery preserves X (unknown-residue) markers ────
+echo "# T16: Viterbi X-marker handling in frameshift recovery"
+cat > "$T/data/test_viterbi_x.aln" << 'EOF'
+>query
+MFVFLVLLPLXXGTNGTKRFDNPV
+>ref
+MFVFLVLLPLIHGTNGTKRFDNPV
+EOF
+cat > "$T/data/test_viterbi_x.nuc" << 'EOF'
+>query
+ATGTTCGTGTTTCTGGTCCTACTCCCCCTGTAACCCGGTACCAATGGTACCAAACGTTTTGATAATCCAGTG
+>ref
+ATGTTCGTGTTTCTGGTCCTACTCCCCCTGATCCATGGTACCAATGGTACCAAACGTTTTGATAATCCAGTG
+EOF
+OUT_VITX=$(perl "$PAL2NAL" "$T/data/test_viterbi_x.aln" "$T/data/test_viterbi_x.nuc" -output codon 2>/dev/null)
+if echo "$OUT_VITX" | grep -q "L   X   X   G"; then
+    echo "ok - T16 Viterbi preserves X markers through frameshift recovery"
+    (( PASS++ )) || true
+else
+    echo "not ok - T16 expected 'L   X   X   G' in aligned output, got:"
+    echo "$OUT_VITX" | head -5
+    (( FAIL++ )) || true
+fi
+
+# ─── T17: Viterbi frameshift recovery preserves digit + gap markers ────────────
+echo "# T17: Viterbi digit/gap-marker handling in frameshift recovery"
+cat > "$T/data/test_viterbi_digit.aln" << 'EOF'
+>query
+AX1-GTV
+>ref
+AIHGTV
+EOF
+cat > "$T/data/test_viterbi_digit.nuc" << 'EOF'
+>query
+GCTATTCGGAACCGTG
+>ref
+GCTATCCATGGAACCGTG
+EOF
+OUT_VITD=$(perl "$PAL2NAL" "$T/data/test_viterbi_digit.aln" "$T/data/test_viterbi_digit.nuc" -output codon 2>/dev/null)
+if echo "$OUT_VITD" | grep -q "A   X   1   -   G"; then
+    echo "ok - T17 Viterbi preserves digit + gap markers through frameshift recovery"
+    (( PASS++ )) || true
+else
+    echo "not ok - T17 expected 'A   X   1   -   G' in aligned output, got:"
+    echo "$OUT_VITD" | head -5
+    (( FAIL++ )) || true
+fi
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed, $SKIP skipped"
 echo "1..$((PASS + FAIL + SKIP))"

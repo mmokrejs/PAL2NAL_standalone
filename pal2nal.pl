@@ -7,7 +7,11 @@
 #
 #
 #
-#    pal2nal.pl  (v14.1)                                      Mikita Suyama
+#    pal2nal.pl  (v14.1-msp)                              Mikita Suyama
+#    NOTE: "-msp" marks the mutation_scatter_plot patched build (full-DP Viterbi
+#    frameshift recovery + homopolymer-aware best-slice dropping).  Stock
+#    upstream reports "v14.1"; the suffix lets --help / provenance tell the
+#    patched build apart from stock.  This branch is the deployed/canonical one.
 #
 #    Usage:  pal2nal.pl  pep.aln  nuc.fasta  [nuc.fasta...]  [options]  >  output
 #
@@ -461,6 +465,8 @@ foreach $i (0..$#aaid) {
 foreach $i (0..$#aaid) {
     $aaseq[$i] =~ s/\\/1/g;
     $aaseq[$i] =~ s/\/(-*)[A-Z\*]/-${1}2/g;
+    $aaseq[$i] =~ s/\!/1/g;
+    $aaseq[$i] =~ s/\?/2/g;
 }
 
 
@@ -1830,8 +1836,108 @@ sub pn2codon {
 
         } else {
 
-            $retval{'result'} = -1;
-
+            # USER REQUESTED FALLBACK: Frameshift Recovery Algorithm
+            # If the global regex fails due to frameshifts, we use a 1-lookahead
+            # Viterbi-style algorithm to pin-point the error, skip extra bases,
+            # pad missing bases with '-', and recover the reading frame ASAP.
+            $message = "WARNING: Global match failed. Falling back to frameshift recovery.";
+            push(@{$retval{'message'}}, $message);
+            my @score = ();
+            my @backtrack = ();
+            $score[0][0] = 0;
+            my $nuclen = length($nuc);
+            
+            for my $i (1 .. $peplen) {
+                my $tmpaa = substr($pep, $i - 1, 1);
+                my $R1 = ($tmpaa =~ /[ACDEFGHIKLMNPQRSTVWY_\*XU]/) ? $p2c{$tmpaa} : $p2c{'X'};
+                my @c_options = ($tmpaa eq '-') ? (0) : ($tmpaa =~ /\d/ ? (int($tmpaa)) : (1, 2, 3, 4, 5));
+                
+                for my $j (0 .. $nuclen) {
+                    $score[$i][$j] = -999999;
+                    foreach my $c (@c_options) {
+                        next if $j - $c < 0 || !defined $score[$i - 1][$j - $c];
+                        my $match_score = ($c == 0 || $tmpaa =~ /\d/) ? 0 : -2.0; # Base frameshift penalty
+                        if ($c == 3) {
+                            $match_score = (substr($nuc, $j - 3, 3) =~ /^$R1$/i) ? 1.0 : -1.0;
+                        } elsif ($c > 3 && substr($nuc, $j - $c, $c) =~ /$R1/i) {
+                            $match_score += 1.0;
+                        }
+                        my $s = $score[$i - 1][$j - $c] + $match_score;
+                        if ($s > $score[$i][$j]) {
+                            $score[$i][$j] = $s;
+                            $backtrack[$i][$j] = $c;
+                        }
+                    }
+                }
+            }
+            
+            # Backtrack
+            my $curr_j = 0;
+            for my $j (0 .. $nuclen) { $curr_j = $j if $score[$peplen][$j] > $score[$peplen][$curr_j]; }
+            
+            my @path;
+            for (my $i = $peplen; $i > 0; $i--) {
+                my $c = defined $backtrack[$i][$curr_j] ? $backtrack[$i][$curr_j] : 3;
+                unshift(@path, $c);
+                $curr_j -= $c;
+            }
+            
+            # Reconstruct sequence
+            my $nuc_idx = ($curr_j > 0) ? $curr_j : 0;
+            my $codonseq = "";
+            for my $i (0 .. $peplen - 1) {
+                my $c = $path[$i];
+                my $tmpaa = substr($pep, $i, 1);
+                if ($tmpaa ne '-') {
+                    my $expected_len = ($tmpaa =~ /\d/) ? int($tmpaa) : 3;
+                    my $sub = substr($nuc, $nuc_idx, $c);
+                    $sub = "" unless defined $sub;
+                    if (length($sub) > $expected_len) {
+                        if ($expected_len == 3 && (length($sub) == 4 || length($sub) == 5)) {
+                            # Homopolymer-aware dropping (grafted from the 1-lookahead
+                            # branch's commit 7f701af): when the DP over-calls a codon by
+                            # 1-2 nt, drop the base(s) that EXTEND a homopolymer run
+                            # rather than naively keeping the first 3.  Each candidate
+                            # 3-nt slice is scored by how many dropped bases repeat an
+                            # adjacent base; the best-scoring slice wins (first-3 as a
+                            # last resort).
+                            my $window = $sub;
+                            my $matched_slice = ""; my $slice_score = -1;
+                            if (length($window) == 4) {
+                                for my $x (0..3) {
+                                    my $sl = substr($window,0,$x) . substr($window,$x+1);
+                                    next unless length($sl) == 3;
+                                    my $sc = 0; my $drp = substr($window,$x,1);
+                                    if    ($x > 0 && substr($window,$x-1,1) eq $drp) { $sc++; }
+                                    elsif ($x < 3 && substr($window,$x+1,1) eq $drp) { $sc++; }
+                                    if ($sc > $slice_score) { $slice_score = $sc; $matched_slice = $sl; }
+                                }
+                            } else {  # length 5
+                                for my $x (0..4) { for my $y ($x+1..4) {
+                                    my $sl = substr($window,0,$x) . substr($window,$x+1,$y-$x-1) . substr($window,$y+1);
+                                    next unless length($sl) == 3;
+                                    my $sc = 0; my $d1 = substr($window,$x,1); my $d2 = substr($window,$y,1);
+                                    if    ($x > 0 && substr($window,$x-1,1) eq $d1) { $sc++; }
+                                    elsif ($x < 4 && substr($window,$x+1,1) eq $d1) { $sc++; }
+                                    if    ($y > 0 && substr($window,$y-1,1) eq $d2) { $sc++; }
+                                    elsif ($y < 4 && substr($window,$y+1,1) eq $d2) { $sc++; }
+                                    if ($sc > $slice_score) { $slice_score = $sc; $matched_slice = $sl; }
+                                } }
+                            }
+                            $matched_slice = substr($window,0,3) if $slice_score == -1;
+                            $sub = $matched_slice;
+                        } else {
+                            $sub = substr($sub, 0, $expected_len);
+                        }
+                    }
+                    $codonseq .= $sub . ('-' x ($expected_len - length($sub)));
+                }
+                $nuc_idx += $c;
+            }
+            
+            $retval{'codonseq'} = $codonseq;
+            $retval{'result'} = 2;
+            
         }
 
     }
@@ -1867,7 +1973,7 @@ sub my1while {
 sub showhelp {
 print STDERR<<EOF;
 
-pal2nal.pl  (v14.1)
+pal2nal.pl  (v14.1-msp)
 
 Usage:  pal2nal.pl  pep.aln  nuc.fasta  [nuc.fasta...]  [options]
 

@@ -33,3 +33,8 @@ inc/
 /MANIFEST.bak
 /pm_to_blib
 /*.zip
+
+# Heredoc-generated test fixtures (written by t/run_tests.sh T15/T16/T17)
+t/data/test_bug1_seq1.*
+t/data/test_viterbi_x.*
+t/data/test_viterbi_digit.*

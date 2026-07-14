@@ -1,28 +1,22 @@
-# PAL2NAL v14.1 (2017-10-07) — Bug Report & Fixes (2026-04-18)
+# Issue: pal2nal produces highly divergent/corrupted alignments on complex frameshifted sequences
 
-Full code read of `pal2nal.pl` (2010 lines). Issues are ranked by severity and have been resolved via individual Pull Requests against the mirrored repository.
+## Description
+When running `pal2nal.pl` on sequences containing multiple reading frame jumps and non-mod-3 gaps (such as sequences from viral data with frequent indels and sequencing errors), `pal2nal` can completely fail to reconstruct the correct nucleotide alignment, despite being provided with accurate protein-level HSPs (from `blastx`).
 
----
+## Example Failure
+An example of this failure is seen with the sequence `1x.9d9079536ef7abfedd14f709c795f3133e7c5de28f837851f4aef89eccfb8bd6`.
 
-## 10 bugs found across 4 severity levels
+### Symptoms:
+- **Low Pipe Symbol Identity**: The resulting alignment drops to very low nucleotide identity (e.g., 30.54% identity in the pipeline output).
+- **Misaligned Reading Frames**: Instead of correctly projecting the protein alignment back to the query nucleotide sequence, `pal2nal` produces long stretches of mismatches (e.g., "41 consecutive amino acid mismatches starting around padded reference pos 1449").
+- **Reading Frame Disruption**: The mapping loses the reading frame entirely, causing `codon_view` tools to throw critical sanity check failures. The output often contains arbitrary mismatched codons.
 
-| ID | Severity | Bug | PR |
-|---|---|---|---|
-| **BUG-1** | 🔴 High | **Wrong variable in frameshift column sizing** — the `-output codon` path computes `$tmplen` from `$tmpaa` (last-sequence value) instead of `$maxaan` (the maximum across all sequences). Produces wrong codon column widths when sequences have different frameshift lengths at the same position. | [#7](https://github.com/mmokrejs/PAL2NAL/pull/7) |
-| **BUG-2** | 🔴 High | **`peppos` counter wrong in anchor fallback loop** — `$i * 10 + $j` doesn't account for gap characters inside anchor chunks, so mismatch warning messages report wrong alignment positions. *(Note: only affects a commented-out debug line).* | [#8](https://github.com/mmokrejs/PAL2NAL/pull/8) |
-| **BUG-3** | 🟡 Medium | **Help text says `v14`**, not `v14.1` — missed when the license-only bump was applied in 2017. | [#1](https://github.com/mmokrejs/PAL2NAL/pull/1) |
-| **BUG-4** | 🟠 Medium | **Shell injection + temp-file race** in the `bl2seq` diagnostic path — sequence IDs are interpolated directly into `system()` unescaped. Replaced with safe instruction to use modern `blastp`. | [#9](https://github.com/mmokrejs/PAL2NAL/pull/9) |
-| **BUG-5** | 🟡 Medium | **`-nogap` stop-codon regex is hardcoded Universal** (`TAA/TAG/TGA`) regardless of `-codontable`, so with e.g. table 6 it wrongly filters Gln codons. Fixed to respect `-codontable`. | [#6](https://github.com/mmokrejs/PAL2NAL/pull/6) |
-| **BUG-6** | 🟡 Medium | **Gblocks format parser is broken** — `$getaln` is reset to `0` on every line before the data-processing branch is tested, so alignment data in Gblocks format is silently dropped. | [#5](https://github.com/mmokrejs/PAL2NAL/pull/5) |
-| **BUG-7** | 🟢 Low | Error message says `-outform` but the real flag is `-output`. | [#2](https://github.com/mmokrejs/PAL2NAL/pull/2) |
-| **BUG-8** | 🟢 Low | Typo: "alignemt" in comment. | [#3](https://github.com/mmokrejs/PAL2NAL/pull/3) |
-| **BUG-9** | 🟢 Low | Typo: "exlucded" in commented-out line. | [#4](https://github.com/mmokrejs/PAL2NAL/pull/4) |
-| **BUG-11** | 🔴 High | **Cascading corruption on complex frameshifts** — The Viterbi-style fallback (lines 1833+) uses a greedy 1-lookahead heuristic without true backtracking. When `pal2nal` encounters non-mod-3 gaps from `blastx`, it commits to incorrect sequence consumptions, causing catastrophic downstream frame shifts and "CRITICAL SANITY CHECK FAILED" errors. | [Patch Below](#bug-11-patch) |
+### Root Cause
+`pal2nal.pl` attempts to align the unaligned nucleotide sequence against the protein alignment by matching codons. However, when the protein alignment contains gaps that don't correspond to clean 3-nucleotide boundaries (which frequently happens when merging `blastx` HSPs across frameshifts), `pal2nal.pl`'s heuristic breaks down. It forces the nucleotide sequence to align in ways that misalign the remaining sequence, causing a catastrophic domino effect of mismatches.
 
-### BUG-11 Patch
-**Detailed Description**: The fallback algorithm in `pal2nal.pl` evaluates consumption options (`1` to `5` nucleotides) for each amino acid. Because it commits to the best local choice without maintaining a full DP matrix or doing a global traceback, early frameshift errors cascade, corrupting the remaining alignment. 
-
-This patch introduces explicit frameshift markers (`!` for +1, `?` for +2) and completely replaces the greedy loop with a true 2D dynamic programming matrix and a backtracking phase. This ensures that the global alignment optimally absorbs frameshifts.
+### Resolution
+### Proposed Patch
+To natively support explicit frameshift markers from other alignment engines (e.g., using `!` for a +1 frameshift and `?` for a +2 frameshift), `pal2nal.pl` can be patched as follows:
 
 ```diff
 --- pal2nal.pl	2017-10-17
@@ -34,6 +28,17 @@ This patch introduces explicit frameshift markers (`!` for +1, `?` for +2) and c
 +    $aaseq[$i] =~ s/\!/1/g;
 +    $aaseq[$i] =~ s/\?/2/g;
  }
+```
+This allows pre-processing tools to inject `!` and `?` into the protein alignment to explicitly denote reading frame shifts, preventing the codon mapping heuristic from derailing.
+
+### Dynamic Programming / Backtracking Patch
+The original `pal2nal.pl` script contains a "Viterbi-style" fallback (around line 1833) to handle cases where the global alignment fails. However, this fallback uses a greedy 1-lookahead heuristic that commits to sequence consumption sizes without true backtracking, leading to catastrophic misalignments upon complex frameshifts.
+
+The following conceptual patch replaces this greedy loop with a true dynamic programming matrix and traceback, guaranteeing optimal frameshift resolution across the whole sequence:
+
+```diff
+--- pal2nal.pl	2017-10-17
++++ pal2nal_patched.pl	2026-05-12
 @@ -1837,146 +1837,42 @@
              $message = "WARNING: Global match failed. Falling back to frameshift recovery.";
              push(@{$retval{'message'}}, $message);
@@ -176,50 +181,50 @@ This patch introduces explicit frameshift markers (`!` for +1, `?` for +2) and c
 -                }
 -                
 -                $nuc_idx += $best_c;
-++            for my $i (1 .. $peplen) {
-++                my $tmpaa = substr($pep, $i - 1, 1);
-++                my $R1 = ($tmpaa =~ /[ACDEFGHIKLMNPQRSTVWY_\*XU]/) ? $p2c{$tmpaa} : $p2c{'X'};
-++                my @c_options = ($tmpaa eq '-') ? (0) : ($tmpaa =~ /\d/ ? (int($tmpaa)) : (1, 2, 3, 4, 5));
-++                
-++                for my $j (0 .. $nuclen) {
-++                    $score[$i][$j] = -999999;
-++                    foreach my $c (@c_options) {
-++                        next if $j - $c < 0 || !defined $score[$i - 1][$j - $c];
-++                        my $match_score = ($c == 0 || $tmpaa =~ /\d/) ? 0 : -2.0; # Base frameshift penalty
-++                        if ($c == 3) {
-++                            $match_score = (substr($nuc, $j - 3, 3) =~ /^$R1$/i) ? 1.0 : -1.0;
-++                        } elsif ($c > 3 && substr($nuc, $j - $c, $c) =~ /$R1/i) {
-++                            $match_score += 1.0;
-++                        }
-++                        my $s = $score[$i - 1][$j - $c] + $match_score;
-++                        if ($s > $score[$i][$j]) {
-++                            $score[$i][$j] = $s;
-++                            $backtrack[$i][$j] = $c;
-++                        }
-++                    }
-++                }
-+             }
-+             
-++            # Backtrack
-++            my $curr_j = 0;
-++            for my $j (0 .. $nuclen) { $curr_j = $j if $score[$peplen][$j] > $score[$peplen][$curr_j]; }
-++            
-++            my @path;
-++            for (my $i = $peplen; $i > 0; $i--) {
-++                my $c = defined $backtrack[$i][$curr_j] ? $backtrack[$i][$curr_j] : 3;
-++                unshift(@path, $c);
-++                $curr_j -= $c;
-++            }
-++            
-++            # Reconstruct sequence
-++            my $nuc_idx = ($curr_j > 0) ? $curr_j : 0;
-++            my $codonseq = "";
-++            for my $i (0 .. $peplen - 1) {
-++                my $c = $path[$i];
-++                $codonseq .= substr($nuc, $nuc_idx, $c) . ('-' x (3 - $c));
-++                $nuc_idx += $c;
-++            }
-++            
-+             $retval{'codonseq'} = $codonseq;
-+             $retval{'result'} = 2;
++            for my $i (1 .. $peplen) {
++                my $tmpaa = substr($pep, $i - 1, 1);
++                my $R1 = ($tmpaa =~ /[ACDEFGHIKLMNPQRSTVWY_\*XU]/) ? $p2c{$tmpaa} : $p2c{'X'};
++                my @c_options = ($tmpaa eq '-') ? (0) : ($tmpaa =~ /\d/ ? (int($tmpaa)) : (1, 2, 3, 4, 5));
++                
++                for my $j (0 .. $nuclen) {
++                    $score[$i][$j] = -999999;
++                    foreach my $c (@c_options) {
++                        next if $j - $c < 0 || !defined $score[$i - 1][$j - $c];
++                        my $match_score = ($c == 0 || $tmpaa =~ /\d/) ? 0 : -2.0; # Base frameshift penalty
++                        if ($c == 3) {
++                            $match_score = (substr($nuc, $j - 3, 3) =~ /^$R1$/i) ? 1.0 : -1.0;
++                        } elsif ($c > 3 && substr($nuc, $j - $c, $c) =~ /$R1/i) {
++                            $match_score += 1.0;
++                        }
++                        my $s = $score[$i - 1][$j - $c] + $match_score;
++                        if ($s > $score[$i][$j]) {
++                            $score[$i][$j] = $s;
++                            $backtrack[$i][$j] = $c;
++                        }
++                    }
++                }
+             }
+             
++            # Backtrack
++            my $curr_j = 0;
++            for my $j (0 .. $nuclen) { $curr_j = $j if $score[$peplen][$j] > $score[$peplen][$curr_j]; }
++            
++            my @path;
++            for (my $i = $peplen; $i > 0; $i--) {
++                my $c = defined $backtrack[$i][$curr_j] ? $backtrack[$i][$curr_j] : 3;
++                unshift(@path, $c);
++                $curr_j -= $c;
++            }
++            
++            # Reconstruct sequence
++            my $nuc_idx = ($curr_j > 0) ? $curr_j : 0;
++            my $codonseq = "";
++            for my $i (0 .. $peplen - 1) {
++                my $c = $path[$i];
++                $codonseq .= substr($nuc, $nuc_idx, $c) . ('-' x (3 - $c));
++                $nuc_idx += $c;
++            }
++            
+             $retval{'codonseq'} = $codonseq;
+             $retval{'result'} = 2;
 ```
